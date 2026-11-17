@@ -50,6 +50,21 @@ Without HTTPS everything works except the camera; barcodes can be typed in.
 - **TD**: enter the HueForge Transmission Distance. Only entries with TD are
   exported to HueForge.
 
+## Automatic lookup for new barcodes (optional)
+
+When you scan an unknown barcode, the app looks for product data and fills
+the **empty** form fields with a suggestion (brand, material, colour, hex,
+weight, temperatures). You always confirm before saving, and **TD is never
+filled in** because it has to be measured.
+
+1. A free barcode database is asked first (only filament-like titles count).
+2. If `ANTHROPIC_API_KEY` is set, Claude searches the web for the product.
+   Needs an API key from console.anthropic.com (billed separately from claude.ai
+   plans) with web search enabled. Set it only in the TrueNAS YAML, never in
+   this repo. `LOOKUP_LIMIT_PER_HOUR` (default 30) caps the cost.
+
+Without a key only step 1 runs. Only the barcode number is sent out.
+
 ## Exports
 
 | Export | Import |

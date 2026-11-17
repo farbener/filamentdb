@@ -10,6 +10,8 @@ Environment variables:
   TLS_CERT/TLS_KEY optional; serve HTTPS directly instead of via a proxy
   BAMBU_PRINTER   printer preset name for Bambu Studio export
                   (default "Bambu Lab P1S 0.4 nozzle")
+  ANTHROPIC_API_KEY  optional; fills in new barcodes with Claude + web search
+                  (see lookup.py for ANTHROPIC_MODEL, LOOKUP_LIMIT_PER_HOUR)
 """
 
 import base64
@@ -27,6 +29,8 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import lookup
 
 APP_DIR = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
@@ -374,6 +378,11 @@ class Handler(BaseHTTPRequestHandler):
             code = path.removeprefix("/api/barcode/")
             match, hint = find_by_barcode(code)
             self.send_json({"match": match, "hint": hint})
+        elif path.startswith("/api/lookup/"):
+            code = path.removeprefix("/api/lookup/")
+            if not re.fullmatch(r"\d{8,14}", code):
+                return self.error(HTTPStatus.BAD_REQUEST, "ungültiger Barcode")
+            self.send_json(lookup.lookup(code))
         elif path == "/export/hueforge.json":
             self.send(200, export_hueforge(), filename="FilamentDB_HueForge.json")
         elif path == "/export/bambu.zip":

@@ -285,6 +285,34 @@ async function handleBarcode(code) {
       notice: hint ? `Neuer Barcode. Marke aus ähnlichem Barcode übernommen (${hint.brand}).` : "Neuer Barcode. Bitte Angaben ergänzen.",
       offerLink: true,
     });
+    suggestFromLookup(code, hint);
+  }
+}
+
+// Fetch brand/colour/temps for an unknown barcode and fill EMPTY fields only.
+// Suggestions have to be checked by the user; TD is never filled in.
+async function suggestFromLookup(code, hint) {
+  const notice = $("#formNotice");
+  const base = notice.textContent;
+  notice.hidden = false;
+  notice.textContent = base + " Suche Produktdaten…";
+  let res;
+  try { res = await api(`api/lookup/${encodeURIComponent(code)}`); }
+  catch { notice.textContent = base; return; }
+  // The user may have closed the form or switched to another barcode meanwhile
+  if (!$("#formDialog").open || form.elements.barcode.value !== code) return;
+  const filled = [];
+  for (const [name, value] of Object.entries(res.fields || {})) {
+    const el = form.elements[name];
+    if (!el || el.value !== "" && !(name === "finish" && el.value === "standard" && value !== "standard")) continue;
+    el.value = value;
+    filled.push(name);
+  }
+  if (filled.length) {
+    const how = res.source === "claude" ? "KI-Vorschlag" : "Vorschlag";
+    notice.textContent = `${base} ${how}, bitte prüfen (TD selbst messen). ${res.message || ""}`.trim();
+  } else {
+    notice.textContent = base + (res.ai_enabled ? " Nichts gefunden." : "");
   }
 }
 
