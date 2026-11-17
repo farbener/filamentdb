@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47,14 +47,14 @@
 <header>
   <div class="row">
     <h1>FilamentDB</h1>
-    <button class="primary" id="scanBtn">📷 Scan</button>
-    <button id="addBtn">＋ Add</button>
+    <button class="primary" id="scanBtn">📷 Scannen</button>
+    <button id="addBtn">＋ Neu</button>
   </div>
   <div class="row filters">
-    <input id="search" type="search" placeholder="Search brand, color, barcode…">
-    <select id="materialFilter"><option value="">All materials</option></select>
-    <label style="display:flex;gap:4px;align-items:center;margin:0;color:var(--muted)">
-      <input type="checkbox" id="hideEmpty" style="width:auto" checked> hide empty
+    <input id="search" type="search" placeholder="Suche Marke, Farbe, Barcode…">
+    <select id="materialFilter"><option value="">Alle Materialien</option></select>
+    <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--muted);width:auto;white-space:nowrap;font-size:14px">
+      <input type="checkbox" id="hideEmpty" style="width:auto" checked> leere ausblenden
     </label>
   </div>
 </header>
@@ -65,26 +65,26 @@
 
   <section class="exports">
     <div class="row">
-      <a class="btn" href="export/hueforge.json">⬇ HueForge library</a>
-      <a class="btn" href="export/bambu.zip">⬇ Bambu Studio presets</a>
-      <a class="btn" href="export/backup.csv">⬇ CSV backup</a>
+      <a class="btn" href="export/hueforge.json">⬇ HueForge-Bibliothek</a>
+      <a class="btn" href="export/bambu.zip">⬇ Bambu-Studio-Profile</a>
+      <a class="btn" href="export/backup.csv">⬇ CSV-Backup</a>
     </div>
-    <p>HueForge: Filaments → Import, select the JSON. Only entries with a TD value and quantity ≥ 1 are exported.<br>
-       Bambu Studio: unzip, then File → Import → Import Configs and select the JSON files. One preset per brand + material.</p>
+    <p>HueForge: Filaments → Import, JSON-Datei wählen. Exportiert werden nur Einträge mit TD-Wert und mindestens 1 Spule.<br>
+       Bambu Studio: ZIP entpacken, dann File → Import → Import Configs und die JSON-Dateien wählen. Ein Profil pro Marke + Material.</p>
   </section>
 </main>
 
 <!-- Scanner -->
 <dialog id="scanDialog">
   <div class="row" style="margin-bottom:8px">
-    <strong style="margin-right:auto">Scan barcode</strong>
+    <strong style="margin-right:auto">Barcode scannen</strong>
     <button id="scanClose">✕</button>
   </div>
   <video id="video" playsinline muted></video>
-  <p class="meta" id="scanStatus">Starting camera…</p>
+  <p class="meta" id="scanStatus">Kamera wird gestartet…</p>
   <div class="row">
-    <input id="manualCode" inputmode="numeric" placeholder="or type the barcode" style="flex:1">
-    <button id="manualGo">Go</button>
+    <input id="manualCode" inputmode="numeric" placeholder="oder Barcode eintippen" style="flex:1">
+    <button id="manualGo">OK</button>
   </div>
 </dialog>
 
@@ -97,35 +97,35 @@
     </div>
     <div id="formNotice" class="notice" hidden></div>
     <div id="linkBox" class="full" hidden style="margin-bottom:10px">
-      <label>New barcode: attach it to an existing entry instead?</label>
-      <select id="linkSelect"><option value="">No, create a new entry</option></select>
+      <label>Neuer Barcode: stattdessen einem bestehenden Eintrag zuordnen?</label>
+      <select id="linkSelect"><option value="">Nein, neuen Eintrag erstellen</option></select>
     </div>
     <div class="grid">
       <div class="full"><label>Barcode</label><input name="barcode" inputmode="numeric"></div>
-      <div><label>Brand *</label><input name="brand" required list="brandList"></div>
+      <div><label>Marke *</label><input name="brand" required list="brandList"></div>
       <div><label>Material *</label><input name="material" required list="materialList" placeholder="PLA, PETG…"></div>
-      <div><label>Color name *</label><input name="color_name" required></div>
-      <div><label>Color</label><input name="color_hex" type="color" value="#808080"></div>
-      <div><label>Finish</label>
+      <div><label>Farbname * (wie auf der Spule)</label><input name="color_name" required></div>
+      <div><label>Farbe</label><input name="color_hex" type="color" value="#808080"></div>
+      <div><label>Oberfläche</label>
         <select name="finish">
-          <option>standard</option><option>matte</option><option>silk</option>
-          <option>transparent</option><option>multicolor</option><option>metallic</option>
+          <option value="standard">Standard</option><option value="matte">Matt</option><option value="silk">Seide (Silk)</option>
+          <option value="transparent">Transparent</option><option value="multicolor">Mehrfarbig</option><option value="metallic">Metallic</option>
         </select></div>
-      <div><label>TD (HueForge)</label><input name="td" type="number" step="0.1" min="0" placeholder="e.g. 3.5"></div>
-      <div><label>Spools</label><input name="quantity" type="number" min="0" value="1"></div>
-      <div><label>Weight per spool (g)</label><input name="weight_g" type="number" min="0"></div>
-      <div><label>Nozzle min °C</label><input name="nozzle_min" type="number"></div>
-      <div><label>Nozzle max °C</label><input name="nozzle_max" type="number"></div>
-      <div><label>Bed min °C</label><input name="bed_min" type="number"></div>
-      <div><label>Bed max °C</label><input name="bed_max" type="number"></div>
-      <div><label>Location</label><input name="location" placeholder="shelf, dry box…"></div>
-      <div><label>Added by</label><input name="added_by"></div>
-      <div class="full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+      <div><label>TD (HueForge)</label><input name="td" type="number" step="0.1" min="0" placeholder="z.B. 3.5"></div>
+      <div><label>Spulen</label><input name="quantity" type="number" min="0" value="1"></div>
+      <div><label>Gewicht pro Spule (g)</label><input name="weight_g" type="number" min="0"></div>
+      <div><label>Düse min °C</label><input name="nozzle_min" type="number"></div>
+      <div><label>Düse max °C</label><input name="nozzle_max" type="number"></div>
+      <div><label>Bett min °C</label><input name="bed_min" type="number"></div>
+      <div><label>Bett max °C</label><input name="bed_max" type="number"></div>
+      <div><label>Lagerort</label><input name="location" placeholder="Regal, Trockenbox…"></div>
+      <div><label>Erfasst von</label><input name="added_by"></div>
+      <div class="full"><label>Notizen</label><textarea name="notes" rows="2"></textarea></div>
     </div>
     <div class="row" style="margin-top:12px">
-      <button type="button" class="danger" id="deleteBtn" hidden>Delete</button>
+      <button type="button" class="danger" id="deleteBtn" hidden>Löschen</button>
       <span style="margin-left:auto"></span>
-      <button type="submit" class="primary">Save</button>
+      <button type="submit" class="primary">Speichern</button>
     </div>
   </form>
 </dialog>
@@ -158,6 +158,7 @@ function toast(msg) {
   clearTimeout(t.timer); t.timer = setTimeout(() => t.style.display = "none", 2500);
 }
 
+const FINISH_DE = { matte: "Matt", silk: "Seide", transparent: "Transparent", multicolor: "Mehrfarbig", metallic: "Metallic" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 
 // ---------- list ----------
@@ -168,18 +169,18 @@ function render() {
 
   // Filter dropdown + datalists from current data
   const materials = [...new Set(filaments.map(f => f.material))].sort();
-  $("#materialFilter").innerHTML = '<option value="">All materials</option>' +
+  $("#materialFilter").innerHTML = '<option value="">Alle Materialien</option>' +
     materials.map(m => `<option ${m === material ? "selected" : ""}>${esc(m)}</option>`).join("");
   $("#brandList").innerHTML = [...new Set(filaments.map(f => f.brand))].map(b => `<option>${esc(b)}</option>`).join("");
 
   const shown = filaments.filter(f =>
     (!material || f.material === material) &&
     (!hideEmpty || f.quantity > 0) &&
-    (!query || [f.brand, f.color_name, f.barcode, f.notes, f.location].join(" ").toLowerCase().includes(query)));
+    (!query || [f.brand, f.color_label, f.barcode, f.notes, f.location].join(" ").toLowerCase().includes(query)));
 
   const missingTd = filaments.filter(f => f.quantity > 0 && f.td == null && !["multicolor", "silk", "transparent"].includes(f.finish)).length;
   $("#tdNotice").hidden = missingTd === 0;
-  $("#tdNotice").textContent = `${missingTd} filament(s) have no TD value yet and won't appear in the HueForge export.`;
+  $("#tdNotice").textContent = `${missingTd} Filament(e) haben noch keinen TD-Wert und fehlen im HueForge-Export.`;
 
   let html = "", lastGroup = "";
   for (const f of shown) {
@@ -189,9 +190,9 @@ function render() {
       <div class="card ${f.quantity < 1 ? "empty" : ""}" data-id="${f.id}">
         <div class="swatch" style="background:${esc(f.color_hex)}"></div>
         <div class="info" data-edit="${f.id}">
-          <div class="title">${esc(f.brand)} ${esc(f.color_name)}</div>
-          <div class="meta">${esc(f.finish !== "standard" ? f.finish + " · " : "")}${f.td != null ? "TD " + f.td : '<span class="missing">no TD</span>'}
-            ${temps ? " · " + temps : ""}${f.location ? " · " + esc(f.location) : ""}${f.barcode ? "" : " · no barcode"}</div>
+          <div class="title">${esc(f.brand)} ${esc(f.color_label)}</div>
+          <div class="meta">${esc(FINISH_DE[f.finish] ? FINISH_DE[f.finish] + " · " : "")}${f.td != null ? "TD " + f.td : '<span class="missing">kein TD</span>'}
+            ${temps ? " · " + temps : ""}${f.location ? " · " + esc(f.location) : ""}${f.barcode ? "" : " · kein Barcode"}</div>
         </div>
         <div class="qty">
           <button data-qty="${f.id}" data-delta="-1">−</button>
@@ -200,7 +201,7 @@ function render() {
         </div>
       </div>`;
   }
-  $("#list").innerHTML = html || '<p class="meta">Nothing found.</p>';
+  $("#list").innerHTML = html || '<p class="meta">Nichts gefunden.</p>';
 }
 
 $("#list").addEventListener("click", async (e) => {
@@ -226,7 +227,7 @@ function openForm(item = null, { prefill = {}, notice = "", offerLink = false } 
   for (const el of form.elements) {
     if (el.name && values[el.name] != null) el.value = values[el.name];
   }
-  $("#formTitle").textContent = item ? `${item.brand} ${item.color_name}` : "New filament";
+  $("#formTitle").textContent = item ? `${item.brand} ${item.color_label}` : "Neues Filament";
   $("#deleteBtn").hidden = !item;
   $("#formNotice").hidden = !notice;
   $("#formNotice").textContent = notice;
@@ -234,8 +235,8 @@ function openForm(item = null, { prefill = {}, notice = "", offerLink = false } 
   // Offer to attach a scanned barcode to an entry that has none yet (e.g. seeded ones)
   const unlinked = filaments.filter(f => !f.barcode);
   $("#linkBox").hidden = !(offerLink && unlinked.length);
-  $("#linkSelect").innerHTML = '<option value="">No, create a new entry</option>' +
-    unlinked.map(f => `<option value="${f.id}">${esc(f.material)} · ${esc(f.brand)} ${esc(f.color_name)}</option>`).join("");
+  $("#linkSelect").innerHTML = '<option value="">Nein, neuen Eintrag erstellen</option>' +
+    unlinked.map(f => `<option value="${f.id}">${esc(f.material)} · ${esc(f.brand)} ${esc(f.color_label)}</option>`).join("");
   $("#formDialog").showModal();
 }
 
@@ -243,7 +244,7 @@ $("#linkSelect").addEventListener("change", () => {
   const f = filaments.find(x => x.id == $("#linkSelect").value);
   if (!f) return;
   const barcode = form.elements.barcode.value;
-  openForm(f, { notice: `Barcode ${barcode} will be saved to this entry.` });
+  openForm(f, { notice: `Barcode ${barcode} wird diesem Eintrag zugeordnet.` });
   form.elements.barcode.value = barcode;
 });
 
@@ -255,13 +256,13 @@ form.addEventListener("submit", async (e) => {
     if (editingId) await api(`api/filaments/${editingId}`, { method: "PUT", body: JSON.stringify(data) });
     else await api("api/filaments", { method: "POST", body: JSON.stringify(data) });
     $("#formDialog").close();
-    toast("Saved");
+    toast("Gespeichert");
     load();
-  } catch (err) { toast("Error: " + err.message); }
+  } catch (err) { toast("Fehler: " + err.message); }
 });
 
 $("#deleteBtn").addEventListener("click", async () => {
-  if (!editingId || !confirm("Delete this entry? Tip: set spools to 0 instead to keep its data.")) return;
+  if (!editingId || !confirm("Eintrag löschen? Tipp: Spulen auf 0 setzen behält die Daten.")) return;
   await api(`api/filaments/${editingId}`, { method: "DELETE" });
   $("#formDialog").close();
   load();
@@ -276,12 +277,12 @@ async function handleBarcode(code) {
   stopScanner();
   const { match, hint } = await api(`api/barcode/${encodeURIComponent(code)}`);
   if (match) {
-    openForm(match, { notice: "Already in the database. Adjust the spool count and save." });
+    openForm(match, { notice: "Bereits erfasst. Spulenanzahl anpassen und speichern." });
     form.elements.quantity.value = match.quantity + 1;
   } else {
     openForm(null, {
       prefill: { barcode: code, ...(hint || {}) },
-      notice: hint ? `New barcode. Brand guessed from a similar barcode (${hint.brand}).` : "New barcode. Fill in the details.",
+      notice: hint ? `Neuer Barcode. Marke aus ähnlichem Barcode übernommen (${hint.brand}).` : "Neuer Barcode. Bitte Angaben ergänzen.",
       offerLink: true,
     });
   }
@@ -305,7 +306,7 @@ async function startScanner() {
   $("#scanDialog").showModal();
   $("#manualCode").value = "";
   if (!window.isSecureContext) {
-    $("#scanStatus").textContent = "Camera needs HTTPS. Type the barcode instead.";
+    $("#scanStatus").textContent = "Die Kamera braucht HTTPS. Barcode bitte eintippen.";
     return;
   }
   try {
@@ -314,7 +315,7 @@ async function startScanner() {
     const video = $("#video");
     video.srcObject = stream;
     await video.play();
-    $("#scanStatus").textContent = "Point the camera at the barcode.";
+    $("#scanStatus").textContent = "Kamera auf den Barcode richten.";
     scanning = true;
     while (scanning) {
       const codes = await detector.detect(video).catch(() => []);
@@ -325,7 +326,7 @@ async function startScanner() {
       await new Promise(r => setTimeout(r, 200));
     }
   } catch (err) {
-    $("#scanStatus").textContent = "Camera error: " + err.message + ". Type the barcode instead.";
+    $("#scanStatus").textContent = "Kamerafehler: " + err.message + ". Barcode bitte eintippen.";
   }
 }
 

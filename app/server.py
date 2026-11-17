@@ -80,6 +80,57 @@ CREATE INDEX IF NOT EXISTS idx_barcode ON filaments(barcode);
 """
 
 
+# ---------- German colour names ----------
+# Manufacturer colour names stay as printed on the spool; the German name is
+# derived for display ("Dark Green / Dunkelgrün"). Unknown words are kept.
+COLOR_WORDS_DE = {
+    "black": "schwarz", "white": "weiss", "grey": "grau", "gray": "grau",
+    "red": "rot", "green": "grün", "blue": "blau", "yellow": "gelb",
+    "orange": "orange", "purple": "violett", "violet": "violett", "pink": "rosa",
+    "brown": "braun", "beige": "beige", "silver": "silber", "gold": "gold",
+    "bronze": "bronze", "copper": "kupfer", "transparent": "transparent",
+    "clear": "klar", "natural": "natur", "cyan": "cyan", "magenta": "magenta",
+    "teal": "petrol", "turquoise": "türkis", "navy": "marineblau", "olive": "oliv",
+    "cream": "creme", "ivory": "elfenbein", "charcoal": "anthrazit",
+    "matte": "matt", "silk": "seide", "glossy": "glänzend", "metallic": "metallic",
+    "multicolor": "mehrfarbig", "multicolour": "mehrfarbig", "gradient": "verlauf",
+    "rainbow": "regenbogen", "unknown": "unbekannt", "color": "farbe", "colour": "farbe",
+}
+# Joined with the following colour into one German word: "Dark Green" -> "Dunkelgrün"
+COLOR_PREFIXES_DE = {"dark": "dunkel", "light": "hell", "pale": "blass",
+                     "deep": "tief", "sky": "himmel", "lime": "limetten"}
+
+
+# Whole names where word-by-word would read badly
+COLOR_PHRASES_DE = {"unknown color": "Unbekannte Farbe", "unknown colour": "Unbekannte Farbe",
+                    "multicolor gradient": "Farbverlauf", "matte white": "Mattweiss",
+                    "matte black": "Mattschwarz"}
+
+
+def color_name_de(name):
+    if name.lower() in COLOR_PHRASES_DE:
+        return COLOR_PHRASES_DE[name.lower()]
+    words = name.split()
+    out, i = [], 0
+    while i < len(words):
+        word = words[i].lower()
+        nxt = words[i + 1].lower() if i + 1 < len(words) else None
+        if word in COLOR_PREFIXES_DE and nxt in COLOR_WORDS_DE:
+            out.append((COLOR_PREFIXES_DE[word] + COLOR_WORDS_DE[nxt]).capitalize())
+            i += 2
+            continue
+        out.append(COLOR_WORDS_DE[word].capitalize() if word in COLOR_WORDS_DE else words[i])
+        i += 1
+    german = " ".join(out)
+    return None if german.lower() == name.lower() else german
+
+
+def color_label(name):
+    """Both languages when they differ: "Dark Green / Dunkelgrün"."""
+    german = color_name_de(name)
+    return f"{name} / {german}" if german else name
+
+
 # ---------- database ----------
 
 def db():
@@ -122,14 +173,14 @@ def clean(data):
     if out.get("material"):
         out["material"] = out["material"].upper()
     if out.get("color_hex") and not re.fullmatch(r"#[0-9a-fA-F]{6}", out["color_hex"]):
-        raise ValueError("color_hex must look like #RRGGBB")
+        raise ValueError("Farbe muss das Format #RRGGBB haben")
     return out
 
 
 def insert_filament(data):
     for required in ("brand", "material", "color_name"):
         if not data.get(required):
-            raise ValueError(f"{required} is required")
+            raise ValueError(f"{required} ist ein Pflichtfeld")
     data = {k: v for k, v in data.items() if v is not None}
     data.update(uuid="{%s}" % uuid.uuid4(), created_at=now(), updated_at=now())
     cols = ", ".join(data)
@@ -153,13 +204,18 @@ def all_filaments():
     with db() as conn:
         rows = conn.execute(
             "SELECT * FROM filaments ORDER BY material, brand, color_name").fetchall()
-    return [dict(r) for r in rows]
+    return [with_label(dict(r)) for r in rows]
+
+
+def with_label(item):
+    item["color_label"] = color_label(item["color_name"])
+    return item
 
 
 def get_filament(fid):
     with db() as conn:
         row = conn.execute("SELECT * FROM filaments WHERE id = ?", (fid,)).fetchone()
-    return dict(row) if row else None
+    return with_label(dict(row)) if row else None
 
 
 def find_by_barcode(code):
@@ -174,7 +230,7 @@ def find_by_barcode(code):
                 "FROM filaments WHERE barcode LIKE ? ORDER BY updated_at DESC LIMIT 1",
                 (code[:7] + "%",)).fetchone()
             hint = dict(similar) if similar else None
-    return (dict(row) if row else None), hint
+    return (with_label(dict(row)) if row else None), hint
 
 
 # ---------- exports ----------
@@ -189,13 +245,13 @@ def export_hueforge():
         items.append({
             "Brand": f["brand"],
             "Color": f["color_hex"].lower(),
-            "Name": f["color_name"],
+            "Name": f["color_label"],
             "Owned": True,
             "Transmissivity": f["td"],
             "Type": f["material"],
             "uuid": f["uuid"],
         })
-    return json.dumps({"Filaments": items}, indent=4)
+    return json.dumps({"Filaments": items}, indent=4, ensure_ascii=False)
 
 
 def bambu_preset(brand, material, sample):
@@ -325,13 +381,13 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/export/backup.csv":
             self.send(200, export_csv(), "text/csv; charset=utf-8", "FilamentDB_backup.csv")
         else:
-            self.error(HTTPStatus.NOT_FOUND, "not found")
+            self.error(HTTPStatus.NOT_FOUND, "nicht gefunden")
 
     def do_POST(self):
         if not self.authorized():
             return
         if self.path != "/api/filaments":
-            return self.error(HTTPStatus.NOT_FOUND, "not found")
+            return self.error(HTTPStatus.NOT_FOUND, "nicht gefunden")
         try:
             new_id = insert_filament(clean(self.read_json()))
         except (ValueError, json.JSONDecodeError) as exc:
@@ -343,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         fid = self.route_id("/api/filaments/")
         if fid is None or not get_filament(fid):
-            return self.error(HTTPStatus.NOT_FOUND, "not found")
+            return self.error(HTTPStatus.NOT_FOUND, "nicht gefunden")
         try:
             update_filament(fid, clean(self.read_json()))
         except (ValueError, json.JSONDecodeError) as exc:
@@ -355,7 +411,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         fid = self.route_id("/api/filaments/")
         if fid is None:
-            return self.error(HTTPStatus.NOT_FOUND, "not found")
+            return self.error(HTTPStatus.NOT_FOUND, "nicht gefunden")
         with db() as conn:
             conn.execute("DELETE FROM filaments WHERE id = ?", (fid,))
         self.send_json({"deleted": fid})
