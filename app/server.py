@@ -8,6 +8,9 @@ Environment variables:
   PORT            listen port (default 8080)
   APP_PASSWORD    optional; enables HTTP Basic auth (any username)
   TLS_CERT/TLS_KEY optional; serve HTTPS directly instead of via a proxy
+  TLS_SELF_SIGNED=1  generate a self-signed certificate in DATA_DIR/tls
+  TLS_HOSTS       comma-separated IPs/names the certificate is valid for
+                  (e.g. "192.168.1.161,truenas"; default "localhost")
   BAMBU_PRINTER   printer preset name for Bambu Studio export
                   (default "Bambu Lab P1S 0.4 nozzle")
   ANTHROPIC_API_KEY  optional; fills in new barcodes with Claude + web search
@@ -429,10 +432,44 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.address_string()} {fmt % args}")
 
 
+def self_signed_cert():
+    """Create (once) a self-signed certificate in DATA_DIR/tls and return
+    (cert, key). Regenerated when TLS_HOSTS changes. Browsers will warn once."""
+    import ipaddress
+    import subprocess
+
+    hosts = [h.strip() for h in os.environ.get("TLS_HOSTS", "localhost").split(",") if h.strip()]
+    san = []
+    for host in hosts:
+        if not re.fullmatch(r"[A-Za-z0-9.\-:]+", host):
+            raise SystemExit(f"TLS_HOSTS: ungültiger Eintrag {host!r}")
+        try:
+            ipaddress.ip_address(host)
+            san.append(f"IP:{host}")
+        except ValueError:
+            san.append(f"DNS:{host}")
+    tls_dir = DATA_DIR / "tls"
+    tls_dir.mkdir(parents=True, exist_ok=True)
+    cert, key, stamp = tls_dir / "cert.pem", tls_dir / "key.pem", tls_dir / "hosts.txt"
+    wanted = ",".join(san)
+    if not (cert.exists() and key.exists() and stamp.exists() and stamp.read_text() == wanted):
+        subprocess.run(
+            ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "825",
+             "-keyout", str(key), "-out", str(cert), "-subj", "/CN=FilamentDB",
+             "-addext", "subjectAltName=" + wanted],
+            check=True, capture_output=True)
+        key.chmod(0o600)
+        stamp.write_text(wanted)
+        print(f"Selbstsigniertes Zertifikat erstellt für {wanted}")
+    return str(cert), str(key)
+
+
 def main():
     init_db()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     cert, key = os.environ.get("TLS_CERT"), os.environ.get("TLS_KEY")
+    if not (cert and key) and os.environ.get("TLS_SELF_SIGNED") == "1":
+        cert, key = self_signed_cert()
     scheme = "http"
     if cert and key:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

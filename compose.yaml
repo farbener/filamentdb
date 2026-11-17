@@ -8,6 +8,9 @@ services:
       APP_PASSWORD: "change-me"   # "" disables the login prompt
       BAMBU_PRINTER: "Bambu Lab P1S 0.4 nozzle"
       ANTHROPIC_API_KEY: ""   # optional: fills in new barcodes (brand, colour, temps) via Claude
+      # HTTPS for the phone camera (self-signed, LAN only). Then use https://<ip>:8099
+      # TLS_SELF_SIGNED: "1"
+      # TLS_HOSTS: "192.168.1.161,truenas"
     ports:
       - "8099:8080"
     volumes:

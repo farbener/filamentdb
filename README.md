@@ -35,6 +35,12 @@ Browsers only allow camera access over HTTPS. Pick one:
   proxy `filament.yourdomain` -> `truenas:8099` with a valid certificate.
 - **Tailscale**: `tailscale serve --bg 8099` on a host that can reach it gives
   `https://<host>.<tailnet>.ts.net`. Your father needs to be in the tailnet.
+- **Self-signed (LAN only)**: set `TLS_SELF_SIGNED: "1"` and
+  `TLS_HOSTS: "192.168.1.161,truenas"` (your server's IP and/or name). The app
+  creates a certificate in `data/tls` on first start. Then open
+  `https://<ip>:8099` (plain http stops working on that port). Each phone shows
+  a certificate warning once: choose Advanced -> Proceed. Change `TLS_HOSTS`
+  and the certificate is recreated.
 - **Direct TLS**: mount a cert and set `TLS_CERT=/certs/fullchain.pem` and
   `TLS_KEY=/certs/privkey.pem`.
 
