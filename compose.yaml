@@ -1,0 +1,29 @@
+# TrueNAS SCALE: Apps -> Discover Apps -> ⋮ -> Install via YAML
+# Replace POOL with your pool name (e.g. tank).
+services:
+  filamentdb:
+    image: ghcr.io/farbener/filamentdb:latest
+    container_name: filamentdb
+    environment:
+      APP_PASSWORD: "change-me"   # "" disables the login prompt
+      BAMBU_PRINTER: "Bambu Lab P1S 0.4 nozzle"
+    ports:
+      - "8099:8080"
+    volumes:
+      - /mnt/POOL/apps/filamentdb/data:/data
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    restart: unless-stopped
+
+  # Pulls a new image after every push to GitHub and restarts filamentdb.
+  # Only touches containers with the label above.
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: filamentdb-watchtower
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "300"   # seconds
+      WATCHTOWER_CLEANUP: "true"        # remove old images
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped

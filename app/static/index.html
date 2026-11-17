@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FilamentDB</title>
+<style>
+  :root { --bg:#16181d; --card:#20232a; --line:#2f333c; --text:#e8e8ea; --muted:#9aa0aa; --accent:#4f9cff; --warn:#e0a03a; --bad:#e05252; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0 auto 0 0; }
+  button, .btn { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; cursor:pointer; text-decoration:none; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.danger { color:var(--bad); }
+  input, select, textarea { background:#111318; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; width:100%; }
+  input[type=color] { padding:2px; height:38px; }
+  main { padding:12px; max-width:900px; margin:0 auto; }
+  .filters { margin-top:8px; }
+  .filters input { flex:1; min-width:140px; }
+  .filters select { width:auto; }
+  .notice { background:#2b2414; border:1px solid var(--warn); color:var(--warn); border-radius:8px; padding:8px 10px; margin-bottom:10px; font-size:14px; }
+  .group { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.05em; margin:16px 0 6px; }
+  .card { display:flex; gap:10px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:6px; }
+  .card.empty { opacity:.45; }
+  .swatch { width:38px; height:38px; border-radius:50%; border:2px solid #0006; flex:none; }
+  .info { flex:1; min-width:0; }
+  .title { font-weight:600; }
+  .meta { color:var(--muted); font-size:13px; }
+  .meta .missing { color:var(--warn); }
+  .qty { display:flex; align-items:center; gap:4px; }
+  .qty button { padding:4px 10px; }
+  .qty span { min-width:20px; text-align:center; font-weight:600; }
+  dialog { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:12px; width:min(560px, 96vw); padding:16px; }
+  dialog::backdrop { background:#000a; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid .full { grid-column:1 / -1; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px; }
+  video { width:100%; border-radius:8px; background:#000; aspect-ratio:4/3; object-fit:cover; }
+  .exports { margin-top:24px; padding-top:12px; border-top:1px solid var(--line); }
+  .exports p { color:var(--muted); font-size:13px; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#000d; padding:8px 14px; border-radius:8px; display:none; z-index:20; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>FilamentDB</h1>
+    <button class="primary" id="scanBtn">📷 Scan</button>
+    <button id="addBtn">＋ Add</button>
+  </div>
+  <div class="row filters">
+    <input id="search" type="search" placeholder="Search brand, color, barcode…">
+    <select id="materialFilter"><option value="">All materials</option></select>
+    <label style="display:flex;gap:4px;align-items:center;margin:0;color:var(--muted)">
+      <input type="checkbox" id="hideEmpty" style="width:auto" checked> hide empty
+    </label>
+  </div>
+</header>
+
+<main>
+  <div id="tdNotice" class="notice" hidden></div>
+  <div id="list"></div>
+
+  <section class="exports">
+    <div class="row">
+      <a class="btn" href="export/hueforge.json">⬇ HueForge library</a>
+      <a class="btn" href="export/bambu.zip">⬇ Bambu Studio presets</a>
+      <a class="btn" href="export/backup.csv">⬇ CSV backup</a>
+    </div>
+    <p>HueForge: Filaments → Import, select the JSON. Only entries with a TD value and quantity ≥ 1 are exported.<br>
+       Bambu Studio: unzip, then File → Import → Import Configs and select the JSON files. One preset per brand + material.</p>
+  </section>
+</main>
+
+<!-- Scanner -->
+<dialog id="scanDialog">
+  <div class="row" style="margin-bottom:8px">
+    <strong style="margin-right:auto">Scan barcode</strong>
+    <button id="scanClose">✕</button>
+  </div>
+  <video id="video" playsinline muted></video>
+  <p class="meta" id="scanStatus">Starting camera…</p>
+  <div class="row">
+    <input id="manualCode" inputmode="numeric" placeholder="or type the barcode" style="flex:1">
+    <button id="manualGo">Go</button>
+  </div>
+</dialog>
+
+<!-- Add / edit form -->
+<dialog id="formDialog">
+  <form id="form" method="dialog">
+    <div class="row" style="margin-bottom:10px">
+      <strong id="formTitle" style="margin-right:auto">Filament</strong>
+      <button type="button" id="formClose">✕</button>
+    </div>
+    <div id="formNotice" class="notice" hidden></div>
+    <div id="linkBox" class="full" hidden style="margin-bottom:10px">
+      <label>New barcode: attach it to an existing entry instead?</label>
+      <select id="linkSelect"><option value="">No, create a new entry</option></select>
+    </div>
+    <div class="grid">
+      <div class="full"><label>Barcode</label><input name="barcode" inputmode="numeric"></div>
+      <div><label>Brand *</label><input name="brand" required list="brandList"></div>
+      <div><label>Material *</label><input name="material" required list="materialList" placeholder="PLA, PETG…"></div>
+      <div><label>Color name *</label><input name="color_name" required></div>
+      <div><label>Color</label><input name="color_hex" type="color" value="#808080"></div>
+      <div><label>Finish</label>
+        <select name="finish">
+          <option>standard</option><option>matte</option><option>silk</option>
+          <option>transparent</option><option>multicolor</option><option>metallic</option>
+        </select></div>
+      <div><label>TD (HueForge)</label><input name="td" type="number" step="0.1" min="0" placeholder="e.g. 3.5"></div>
+      <div><label>Spools</label><input name="quantity" type="number" min="0" value="1"></div>
+      <div><label>Weight per spool (g)</label><input name="weight_g" type="number" min="0"></div>
+      <div><label>Nozzle min °C</label><input name="nozzle_min" type="number"></div>
+      <div><label>Nozzle max °C</label><input name="nozzle_max" type="number"></div>
+      <div><label>Bed min °C</label><input name="bed_min" type="number"></div>
+      <div><label>Bed max °C</label><input name="bed_max" type="number"></div>
+      <div><label>Location</label><input name="location" placeholder="shelf, dry box…"></div>
+      <div><label>Added by</label><input name="added_by"></div>
+      <div class="full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="danger" id="deleteBtn" hidden>Delete</button>
+      <span style="margin-left:auto"></span>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<datalist id="brandList"></datalist>
+<datalist id="materialList"><option>PLA</option><option>PETG</option><option>TPU</option><option>ABS</option><option>ASA</option></datalist>
+<div id="toast"></div>
+
+<script type="module">
+const $ = (sel) => document.querySelector(sel);
+let filaments = [];
+let editingId = null;
+
+// ---------- API ----------
+async function api(path, options = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function load() {
+  filaments = await api("api/filaments");
+  render();
+}
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.style.display = "block";
+  clearTimeout(t.timer); t.timer = setTimeout(() => t.style.display = "none", 2500);
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+
+// ---------- list ----------
+function render() {
+  const query = $("#search").value.trim().toLowerCase();
+  const material = $("#materialFilter").value;
+  const hideEmpty = $("#hideEmpty").checked;
+
+  // Filter dropdown + datalists from current data
+  const materials = [...new Set(filaments.map(f => f.material))].sort();
+  $("#materialFilter").innerHTML = '<option value="">All materials</option>' +
+    materials.map(m => `<option ${m === material ? "selected" : ""}>${esc(m)}</option>`).join("");
+  $("#brandList").innerHTML = [...new Set(filaments.map(f => f.brand))].map(b => `<option>${esc(b)}</option>`).join("");
+
+  const shown = filaments.filter(f =>
+    (!material || f.material === material) &&
+    (!hideEmpty || f.quantity > 0) &&
+    (!query || [f.brand, f.color_name, f.barcode, f.notes, f.location].join(" ").toLowerCase().includes(query)));
+
+  const missingTd = filaments.filter(f => f.quantity > 0 && f.td == null && !["multicolor", "silk", "transparent"].includes(f.finish)).length;
+  $("#tdNotice").hidden = missingTd === 0;
+  $("#tdNotice").textContent = `${missingTd} filament(s) have no TD value yet and won't appear in the HueForge export.`;
+
+  let html = "", lastGroup = "";
+  for (const f of shown) {
+    if (f.material !== lastGroup) { html += `<div class="group">${esc(f.material)}</div>`; lastGroup = f.material; }
+    const temps = f.nozzle_min ? `${f.nozzle_min}–${f.nozzle_max} °C` : "";
+    html += `
+      <div class="card ${f.quantity < 1 ? "empty" : ""}" data-id="${f.id}">
+        <div class="swatch" style="background:${esc(f.color_hex)}"></div>
+        <div class="info" data-edit="${f.id}">
+          <div class="title">${esc(f.brand)} ${esc(f.color_name)}</div>
+          <div class="meta">${esc(f.finish !== "standard" ? f.finish + " · " : "")}${f.td != null ? "TD " + f.td : '<span class="missing">no TD</span>'}
+            ${temps ? " · " + temps : ""}${f.location ? " · " + esc(f.location) : ""}${f.barcode ? "" : " · no barcode"}</div>
+        </div>
+        <div class="qty">
+          <button data-qty="${f.id}" data-delta="-1">−</button>
+          <span>${f.quantity}</span>
+          <button data-qty="${f.id}" data-delta="1">＋</button>
+        </div>
+      </div>`;
+  }
+  $("#list").innerHTML = html || '<p class="meta">Nothing found.</p>';
+}
+
+$("#list").addEventListener("click", async (e) => {
+  const qtyBtn = e.target.closest("[data-qty]");
+  if (qtyBtn) {
+    const f = filaments.find(x => x.id == qtyBtn.dataset.qty);
+    const quantity = Math.max(0, f.quantity + Number(qtyBtn.dataset.delta));
+    await api(`api/filaments/${f.id}`, { method: "PUT", body: JSON.stringify({ quantity }) });
+    return load();
+  }
+  const info = e.target.closest("[data-edit]");
+  if (info) openForm(filaments.find(x => x.id == info.dataset.edit));
+});
+["#search", "#materialFilter", "#hideEmpty"].forEach(s => $(s).addEventListener("input", render));
+
+// ---------- form ----------
+const form = $("#form");
+
+function openForm(item = null, { prefill = {}, notice = "", offerLink = false } = {}) {
+  editingId = item?.id ?? null;
+  form.reset();
+  const values = { quantity: 1, added_by: localStorage.getItem("addedBy") || "", ...prefill, ...(item || {}) };
+  for (const el of form.elements) {
+    if (el.name && values[el.name] != null) el.value = values[el.name];
+  }
+  $("#formTitle").textContent = item ? `${item.brand} ${item.color_name}` : "New filament";
+  $("#deleteBtn").hidden = !item;
+  $("#formNotice").hidden = !notice;
+  $("#formNotice").textContent = notice;
+
+  // Offer to attach a scanned barcode to an entry that has none yet (e.g. seeded ones)
+  const unlinked = filaments.filter(f => !f.barcode);
+  $("#linkBox").hidden = !(offerLink && unlinked.length);
+  $("#linkSelect").innerHTML = '<option value="">No, create a new entry</option>' +
+    unlinked.map(f => `<option value="${f.id}">${esc(f.material)} · ${esc(f.brand)} ${esc(f.color_name)}</option>`).join("");
+  $("#formDialog").showModal();
+}
+
+$("#linkSelect").addEventListener("change", () => {
+  const f = filaments.find(x => x.id == $("#linkSelect").value);
+  if (!f) return;
+  const barcode = form.elements.barcode.value;
+  openForm(f, { notice: `Barcode ${barcode} will be saved to this entry.` });
+  form.elements.barcode.value = barcode;
+});
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form));
+  if (data.added_by) localStorage.setItem("addedBy", data.added_by);
+  try {
+    if (editingId) await api(`api/filaments/${editingId}`, { method: "PUT", body: JSON.stringify(data) });
+    else await api("api/filaments", { method: "POST", body: JSON.stringify(data) });
+    $("#formDialog").close();
+    toast("Saved");
+    load();
+  } catch (err) { toast("Error: " + err.message); }
+});
+
+$("#deleteBtn").addEventListener("click", async () => {
+  if (!editingId || !confirm("Delete this entry? Tip: set spools to 0 instead to keep its data.")) return;
+  await api(`api/filaments/${editingId}`, { method: "DELETE" });
+  $("#formDialog").close();
+  load();
+});
+$("#formClose").addEventListener("click", () => $("#formDialog").close());
+$("#addBtn").addEventListener("click", () => openForm());
+
+// ---------- barcode handling ----------
+async function handleBarcode(code) {
+  code = code.trim();
+  if (!code) return;
+  stopScanner();
+  const { match, hint } = await api(`api/barcode/${encodeURIComponent(code)}`);
+  if (match) {
+    openForm(match, { notice: "Already in the database. Adjust the spool count and save." });
+    form.elements.quantity.value = match.quantity + 1;
+  } else {
+    openForm(null, {
+      prefill: { barcode: code, ...(hint || {}) },
+      notice: hint ? `New barcode. Brand guessed from a similar barcode (${hint.brand}).` : "New barcode. Fill in the details.",
+      offerLink: true,
+    });
+  }
+}
+
+// ---------- camera scanner ----------
+let stream = null, scanning = false;
+
+async function getDetector() {
+  const formats = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"];
+  if ("BarcodeDetector" in window) {
+    const supported = await window.BarcodeDetector.getSupportedFormats();
+    if (supported.includes("ean_13")) return new window.BarcodeDetector({ formats });
+  }
+  // Fallback for browsers without native support (e.g. iOS Safari, Firefox)
+  const { BarcodeDetector } = await import("https://cdn.jsdelivr.net/npm/barcode-detector@3/dist/es/ponyfill.js");
+  return new BarcodeDetector({ formats });
+}
+
+async function startScanner() {
+  $("#scanDialog").showModal();
+  $("#manualCode").value = "";
+  if (!window.isSecureContext) {
+    $("#scanStatus").textContent = "Camera needs HTTPS. Type the barcode instead.";
+    return;
+  }
+  try {
+    const detector = await getDetector();
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const video = $("#video");
+    video.srcObject = stream;
+    await video.play();
+    $("#scanStatus").textContent = "Point the camera at the barcode.";
+    scanning = true;
+    while (scanning) {
+      const codes = await detector.detect(video).catch(() => []);
+      if (codes.length) {
+        navigator.vibrate?.(100);
+        return handleBarcode(codes[0].rawValue);
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+  } catch (err) {
+    $("#scanStatus").textContent = "Camera error: " + err.message + ". Type the barcode instead.";
+  }
+}
+
+function stopScanner() {
+  scanning = false;
+  stream?.getTracks().forEach(t => t.stop());
+  stream = null;
+  if ($("#scanDialog").open) $("#scanDialog").close();
+}
+
+$("#scanBtn").addEventListener("click", startScanner);
+$("#scanClose").addEventListener("click", stopScanner);
+$("#scanDialog").addEventListener("cancel", stopScanner);
+$("#manualGo").addEventListener("click", () => handleBarcode($("#manualCode").value));
+$("#manualCode").addEventListener("keydown", e => { if (e.key === "Enter") handleBarcode(e.target.value); });
+
+load();
+</script>
+</body>
+</html>
