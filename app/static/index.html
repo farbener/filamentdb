@@ -374,6 +374,7 @@ async function getDetector() {
 }
 
 async function startScanner() {
+  stopStream();
   $("#scanDialog").showModal();
   $("#manualCode").value = "";
   if (!window.isSecureContext) {
@@ -382,29 +383,53 @@ async function startScanner() {
   }
   try {
     const detector = await getDetector();
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    // High resolution + continuous autofocus: the default 640x480 stream is
+    // too blurry for the small barcodes on filament spools.
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    });
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities?.() || {};
+    const adv = {};
+    if (caps.focusMode?.includes("continuous")) adv.focusMode = "continuous";
+    if (caps.zoom) adv.zoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2));
+    if (Object.keys(adv).length) await track.applyConstraints({ advanced: [adv] }).catch(() => {});
     const video = $("#video");
     video.srcObject = stream;
     await video.play();
-    $("#scanStatus").textContent = "Kamera auf den Barcode richten.";
+    $("#scanStatus").textContent = "Kamera auf den Barcode richten, 10-20 cm Abstand, gutes Licht.";
     scanning = true;
-    while (scanning) {
-      const codes = await detector.detect(video).catch(() => []);
-      if (codes.length) {
-        navigator.vibrate?.(100);
-        return handleBarcode(codes[0].rawValue);
+    const myStream = stream;
+    let errShown = false, lastHint = Date.now();
+    while (scanning && stream === myStream) {
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) {
+          navigator.vibrate?.(100);
+          return handleBarcode(codes[0].rawValue);
+        }
+      } catch (e) {
+        if (!errShown) { errShown = true; $("#scanStatus").textContent = "Scanner-Fehler: " + e.message; }
       }
-      await new Promise(r => setTimeout(r, 200));
+      if (!errShown && Date.now() - lastHint > 6000) {
+        lastHint = Date.now();
+        $("#scanStatus").textContent = "Nichts erkannt. Näher/weiter weg, Barcode gerade halten, mehr Licht, oder unten eintippen.";
+      }
+      await new Promise(r => setTimeout(r, 100));
     }
   } catch (err) {
     $("#scanStatus").textContent = "Kamerafehler: " + err.message + ". Barcode bitte eintippen.";
   }
 }
 
-function stopScanner() {
+function stopStream() {
   scanning = false;
   stream?.getTracks().forEach(t => t.stop());
   stream = null;
+}
+
+function stopScanner() {
+  stopStream();
   if ($("#scanDialog").open) $("#scanDialog").close();
 }
 
