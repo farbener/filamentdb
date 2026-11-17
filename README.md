@@ -60,7 +60,7 @@ filled in** because it has to be measured.
 1. A free barcode database is asked first (only filament-like titles count).
 2. If `ANTHROPIC_API_KEY` is set, Claude searches the web for the product.
    Needs an API key from console.anthropic.com (billed separately from claude.ai
-   plans) with web search enabled. Set it only in the TrueNAS YAML, never in
+   plans) with web search enabled. Set it in the TrueNAS YAML, or put it alone in `data/anthropic.key` (read on every lookup). Never put it in
    this repo. `LOOKUP_LIMIT_PER_HOUR` (default 30) caps the cost.
 
 Without a key only step 1 runs. Only the barcode number is sent out.

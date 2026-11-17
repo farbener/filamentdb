@@ -4,7 +4,8 @@ Returns *suggestions* only. The user confirms them in the form before anything
 is saved. TD is never suggested, it has to be measured.
 
 Environment variables:
-  ANTHROPIC_API_KEY   optional; enables the Claude fallback
+  ANTHROPIC_API_KEY   optional; enables the Claude fallback (or put the key in
+                      DATA_DIR/anthropic.key, read on every lookup)
   ANTHROPIC_MODEL     model id (default claude-haiku-5-5)
   LOOKUP_LIMIT_PER_HOUR  max Claude calls per hour (default 30)
 """
@@ -18,7 +19,22 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+KEY_FILE = os.path.join(os.environ.get("DATA_DIR", "/data"), "anthropic.key")
+
+
+def api_key():
+    """Key from the environment, or from DATA_DIR/anthropic.key (re-read on
+    every call, so no restart is needed after creating the file)."""
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if key:
+        return key
+    try:
+        with open(KEY_FILE, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 LIMIT_PER_HOUR = int(os.environ.get("LOOKUP_LIMIT_PER_HOUR", "30"))
 
@@ -32,7 +48,7 @@ _lock = threading.Lock()
 
 
 def enabled():
-    return bool(ANTHROPIC_API_KEY)
+    return bool(api_key())
 
 
 # ---------- helpers ----------
@@ -143,7 +159,7 @@ def _claude_request(messages, use_search):
     return _http_json(
         "https://api.anthropic.com/v1/messages",
         data=json.dumps(body).encode(),
-        headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
+        headers={"x-api-key": api_key(), "anthropic-version": "2023-06-01",
                  "content-type": "application/json"},
         timeout=90,
     )
