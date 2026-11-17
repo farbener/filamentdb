@@ -24,6 +24,7 @@
   .filters { margin-top:8px; }
   .filters input { flex:1; min-width:140px; }
   .filters select { width:auto; }
+  .filters input[type=checkbox] { min-width:0; flex:none; }
   .notice { background:#2b2414; border:1px solid var(--warn); color:var(--warn); border-radius:8px; padding:8px 10px; margin-bottom:10px; font-size:14px; }
   .group { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.05em; margin:16px 0 6px; }
   .card { display:flex; gap:10px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:6px; }
@@ -55,7 +56,8 @@
     header { padding-top:calc(10px + env(safe-area-inset-top)); }
     /* 16px stops iOS Safari from zooming into the page when a field is focused */
     input, select, textarea { font-size:16px; min-height:44px; }
-    input[type=checkbox] { min-height:0; width:22px !important; height:22px; }
+    input[type=checkbox] { min-height:0; width:22px !important; height:22px; padding:0; margin:0; flex:none; }
+    .filters label { justify-content:flex-start; gap:10px !important; min-height:44px; }
     button, .btn { min-height:44px; padding:10px 14px; }
     h1 { font-size:17px; }
     /* header: title + two buttons on one line, filters below; search takes the full width */
