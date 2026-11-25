@@ -154,8 +154,23 @@
           <option value="standard">Standard</option><option value="matte">Matt</option><option value="silk">Seide (Silk)</option>
           <option value="transparent">Transparent</option><option value="multicolor">Mehrfarbig</option><option value="metallic">Metallic</option>
         </select></div>
-      <div><label>TD (HueForge)</label><input name="td" type="number" step="0.1" min="0" placeholder="z.B. 3.5"></div>
+      <div><label>TD (HueForge)</label><input name="td" type="number" step="any" min="0" placeholder="z.B. 3.5"></div>
       <div><label>Spulen</label><input name="quantity" type="number" min="0" value="1"></div>
+      <div class="full">
+        <div class="row">
+          <button type="button" id="td1Btn">🔌 TD1 verbinden</button>
+          <span class="meta" id="td1Status" style="flex:1"></span>
+        </div>
+        <div class="row" id="td1Reading" hidden style="margin-top:6px">
+          <div class="swatch" id="td1Swatch"></div>
+          <span id="td1Text" style="flex:1"></span>
+          <button type="button" id="td1Color">Farbe übernehmen</button>
+        </div>
+        <details id="td1Debug" hidden style="margin-top:6px">
+          <summary class="meta">TD1 Rohdaten</summary>
+          <pre id="td1Raw" class="meta" style="white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
+        </details>
+      </div>
       <div><label>Gewicht pro Spule (g)</label><input name="weight_g" type="number" min="0"></div>
       <div><label>Düse min °C</label><input name="nozzle_min" type="number"></div>
       <div><label>Düse max °C</label><input name="nozzle_max" type="number"></div>
@@ -266,6 +281,7 @@ const form = $("#form");
 function openForm(item = null, { prefill = {}, notice = "", offerLink = false } = {}) {
   editingId = item?.id ?? null;
   form.reset();
+  $("#td1Reading").hidden = true; // a reading belongs to the entry that was open
   const values = { quantity: 1, added_by: localStorage.getItem("addedBy") || "", ...prefill, ...(item || {}) };
   for (const el of form.elements) {
     if (el.name && values[el.name] != null) el.value = values[el.name];
@@ -438,6 +454,138 @@ $("#scanClose").addEventListener("click", stopScanner);
 $("#scanDialog").addEventListener("cancel", stopScanner);
 $("#manualGo").addEventListener("click", () => handleBarcode($("#manualCode").value));
 $("#manualCode").addEventListener("keydown", e => { if (e.key === "Enter") handleBarcode(e.target.value); });
+
+// ---------- TD1 sensor (USB) ----------
+// The TD1 is a USB serial device that sends one text line per measurement.
+// Android Chrome: WebUSB (we speak CDC-ACM ourselves). Desktop Chrome/Edge: Web Serial.
+const TD1_VENDOR = 0xE4B2;
+const useWebUsb = "usb" in navigator && (/Android/i.test(navigator.userAgent) || !("serial" in navigator));
+const td1 = { close: null, lines: [], hex: null };
+
+// Formats: "id,,,,3.7,7A2938" (TD and colour are the last two fields).
+// Everything else, e.g. "clearScreen", is ignored.
+function parseTd1Line(line) {
+  const parts = line.split(",").map(s => s.trim());
+  if (parts.length < 6) return null;
+  const [tdText, hexText] = parts.slice(-2);
+  const td = Number(tdText), hex = hexText.replace(/^#/, "");
+  if (!tdText || !(td > 0 && td <= 200) || !/^[0-9a-f]{6}$/i.test(hex)) return null;
+  return { td: Math.round(td * 100) / 100, hex: "#" + hex.toLowerCase() };
+}
+
+function onTd1Line(line) {
+  td1.lines = [...td1.lines, line].slice(-8);
+  $("#td1Debug").hidden = false;
+  $("#td1Raw").textContent = td1.lines.join("\n");
+  const reading = parseTd1Line(line);
+  if (!reading) return;
+  navigator.vibrate?.(100);
+  if (!$("#formDialog").open) return toast(`TD ${reading.td} gemessen. Erst eine Spule öffnen, dann neu messen.`);
+  form.elements.td.value = reading.td;
+  td1.hex = reading.hex;
+  $("#td1Swatch").style.background = reading.hex;
+  $("#td1Text").textContent = `Gemessen: TD ${reading.td} · ${reading.hex}. Zum Übernehmen speichern.`;
+  $("#td1Reading").hidden = false;
+}
+
+function lineSplitter() {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  return (bytes) => {
+    buffer += decoder.decode(bytes, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop().slice(-500);
+    lines.map(l => l.trim()).filter(Boolean).forEach(onTd1Line);
+  };
+}
+
+function td1State(connected, message) {
+  if (!connected) td1.close = null;
+  $("#td1Btn").textContent = connected ? "TD1 trennen" : "🔌 TD1 verbinden";
+  $("#td1Status").textContent = message;
+}
+
+async function openTd1Usb() {
+  const device = await navigator.usb.requestDevice({ filters: [{ vendorId: TD1_VENDOR }] });
+  await device.open();
+  let open = true;
+  try {
+    if (!device.configuration) await device.selectConfiguration(1);
+    const ifaces = device.configuration.interfaces;
+    const control = ifaces.find(i => i.alternate.interfaceClass === 0x02);
+    const data = ifaces.find(i => i.alternate.interfaceClass === 0x0A);
+    if (!data) throw new Error("Keine serielle Schnittstelle gefunden");
+    if (control) await device.claimInterface(control.interfaceNumber);
+    await device.claimInterface(data.interfaceNumber);
+    const endpoint = data.alternate.endpoints.find(e => e.direction === "in");
+    const target = { requestType: "class", recipient: "interface", index: control?.interfaceNumber ?? data.interfaceNumber };
+    // 115200 baud, 8N1; then raise DTR + RTS so the sensor starts sending
+    await device.controlTransferOut({ ...target, request: 0x20, value: 0 }, new Uint8Array([0x00, 0xC2, 0x01, 0x00, 0, 0, 8]));
+    await device.controlTransferOut({ ...target, request: 0x22, value: 0x03 });
+    const push = lineSplitter();
+    (async () => {
+      try {
+        while (open) {
+          const result = await device.transferIn(endpoint.endpointNumber, 64);
+          if (result.status === "stall") await device.clearHalt("in", endpoint.endpointNumber);
+          else if (result.data?.byteLength) push(result.data);
+        }
+      } catch (err) {
+        if (open) { open = false; device.close().catch(() => {}); td1State(false, "TD1 getrennt."); }
+      }
+    })();
+  } catch (err) {
+    await device.close().catch(() => {});
+    throw err;
+  }
+  return async () => { open = false; await device.close(); };
+}
+
+async function openTd1Serial() {
+  const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: TD1_VENDOR }] });
+  await port.open({ baudRate: 115200 });
+  await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+  const reader = port.readable.getReader();
+  const push = lineSplitter();
+  let closing = false;
+  const loop = (async () => {
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        push(value);
+      }
+    } catch (err) { /* unplugged */ }
+    reader.releaseLock();
+    if (!closing) { await port.close().catch(() => {}); td1State(false, "TD1 getrennt."); }
+  })();
+  return async () => { closing = true; await reader.cancel().catch(() => {}); await loop; await port.close(); };
+}
+
+$("#td1Btn").addEventListener("click", async () => {
+  const button = $("#td1Btn");
+  button.disabled = true;
+  try {
+    if (td1.close) {
+      await td1.close().catch(() => {});
+      td1State(false, "");
+    } else if (!window.isSecureContext || !(useWebUsb || "serial" in navigator)) {
+      td1State(false, "Geht nur mit Chrome (Android oder PC) über HTTPS.");
+    } else {
+      td1.close = await (useWebUsb ? openTd1Usb() : openTd1Serial());
+      td1State(true, "Verbunden. Filament in den TD1 schieben.");
+    }
+  } catch (err) {
+    td1State(false, err.name === "NotFoundError" ? "Kein TD1 ausgewählt." : "TD1-Fehler: " + err.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#td1Color").addEventListener("click", () => {
+  form.elements.color_hex.value = td1.hex;
+  toast("Farbe übernommen");
+});
 
 load();
 </script>

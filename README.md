@@ -71,6 +71,20 @@ filled in** because it has to be measured.
 
 Without a key only step 1 runs. Only the barcode number is sent out.
 
+## Measuring TD with a TD1
+
+Needs HTTPS (see above) and Chrome on Android, or Chrome/Edge on a PC. iPhone
+is not supported.
+
+1. Plug the TD1 into the phone or PC.
+2. Open a spool (scan it or tap it), then **TD1 verbinden** and allow access.
+3. Insert the filament. TD is filled in; **Farbe übernehmen** also takes the
+   measured colour. Tap **Speichern**.
+
+The connection stays open while the page is open, so for the next spool just
+open it and insert the filament. **TD1 Rohdaten** shows what the device sends.
+Close HueForge first: only one program can use the TD1 at a time.
+
 ## Exports
 
 | Export | Import |
