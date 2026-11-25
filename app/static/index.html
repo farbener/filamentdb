@@ -11,6 +11,7 @@
 <style>
   :root { --bg:#16181d; --card:#20232a; --line:#2f333c; --text:#e8e8ea; --muted:#9aa0aa; --accent:#4f9cff; --warn:#e0a03a; --bad:#e05252; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; } /* .row sets display:flex, which would override hidden */
   body { margin:0; font:15px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text); }
   header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 12px; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
